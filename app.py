@@ -31,18 +31,10 @@ if correction_mode == "Real AI Mode (Groq)":
         try:
             client = Groq(api_key=groq_api_key)
             models_data = client.models.list()
-            # Filter only standard text models (like llama, mixtral, gemma) and exclude guard/whisper/canopylabs
             available_models = [
                 m.id for m in models_data.data 
-                if "guard" not in m.id.lower() 
-                and "whisper" not in m.id.lower() 
-                and "canopylabs" not in m.id.lower()
-                and ("llama" in m.id.lower() or "mixtral" in m.id.lower() or "gemma" in m.id.lower())
+                if "guard" not in m.id.lower() and "whisper" not in m.id.lower()
             ]
-            if not available_models:
-                # Fallback if specific keywords don't match
-                available_models = [m.id for m in models_data.data if "guard" not in m.id.lower() and "whisper" not in m.id.lower()]
-
             if available_models:
                 selected_model = st.sidebar.selectbox("Select Active Groq Model", available_models)
             else:
