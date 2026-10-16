@@ -178,4 +178,4 @@ Input Sentence: "{user_input}"
                         st.info(f"💡 **Explanation ({expl_lang}):** {explanation}")
                         
                     except Exception as e:
-                        st.error(f5"API Execution Error: {e}")
+                        st.error(f"API Execution Error: {e}")
