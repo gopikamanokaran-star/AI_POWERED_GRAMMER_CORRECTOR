@@ -1,7 +1,7 @@
 import streamlit as st
 
 # Page Configuration
-st.set_page_config(page_title="AI Grammar Corrector", page_icon="✍️", layout="wide")
+st.set_page_config(page_title="AI Grammar Corrector & Explainer", page_icon="✍️", layout="wide")
 
 # Check availability of Groq library
 try:
@@ -15,6 +15,12 @@ st.sidebar.title("⚙️ Settings")
 correction_mode = st.sidebar.selectbox(
     "Choose Correction Mode",
     ["Smart Rules", "Real AI Mode (Groq)"]
+)
+
+# Explanation Language Option (English / Thanglish)
+expl_lang = st.sidebar.selectbox(
+    "Explanation Language",
+    ["English", "Thanglish (Tamil-English)"]
 )
 
 groq_api_key = ""
@@ -31,10 +37,17 @@ if correction_mode == "Real AI Mode (Groq)":
         try:
             client = Groq(api_key=groq_api_key)
             models_data = client.models.list()
+            # Smart Filtering: Exclude audio, guard, and regional models to avoid 400/404 errors
             available_models = [
                 m.id for m in models_data.data 
-                if "guard" not in m.id.lower() and "whisper" not in m.id.lower()
+                if "guard" not in m.id.lower() 
+                and "whisper" not in m.id.lower() 
+                and "canopylabs" not in m.id.lower()
+                and ("llama" in m.id.lower() or "mixtral" in m.id.lower() or "gemma" in m.id.lower())
             ]
+            if not available_models:
+                available_models = [m.id for m in models_data.data if "guard" not in m.id.lower() and "whisper" not in m.id.lower()]
+
             if available_models:
                 selected_model = st.sidebar.selectbox("Select Active Groq Model", available_models)
             else:
@@ -60,13 +73,13 @@ if st.button("Check Grammar & Explain", type="primary"):
                     "he go to school yesterday": {
                         "corrected": "He went to school yesterday.",
                         "error_type": "Past Tense Error",
-                        "explanation": "'yesterday' indicates past time; use past tense verb 'went' instead of 'go'.",
+                        "explanation": "'yesterday' indicates past time; use past tense verb 'went' instead of 'go'." if expl_lang == "English" else "'-la 'yesterday' irukkuradhaala past tense verb 'went' dhaan use pannanum.",
                         "score": 60
                     },
                     "im learning yesterday": {
                         "corrected": "I was learning yesterday.",
                         "error_type": "Tense & Capitalization Error",
-                        "explanation": "'im' should be capitalized and corrected to 'I was' to match the past time marker 'yesterday'.",
+                        "explanation": "'im' should be capitalized and corrected to 'I was' to match 'yesterday'." if expl_lang == "English" else "'im'-a 'I was' nu maathanum, yenna 'yesterday' vandhu past time-a kaattudhu.",
                         "score": 50
                     }
                 }
@@ -82,7 +95,7 @@ if st.button("Check Grammar & Explain", type="primary"):
                     
                     st.success(f"### Corrected Sentence:\n{res['corrected']}")
                     st.warning(f"📌 **Error Type:** {res['error_type']}")
-                    st.info(f"💡 **Explanation:** {res['explanation']}")
+                    st.info(f"💡 **Explanation ({expl_lang}):** {res['explanation']}")
                 else:
                     corrected = user_input.strip().capitalize()
                     if not corrected.endswith(('.', '?', '!')):
@@ -95,7 +108,8 @@ if st.button("Check Grammar & Explain", type="primary"):
                     st.divider()
                     
                     st.success(f"### Corrected Sentence:\n{corrected}")
-                    st.info("📌 **Error Type:** Basic Formatting\n\n💡 **Explanation:** Adjusted initial capitalization and added proper sentence-ending punctuation.")
+                    st.info(f"📌 **Error Type:** Basic Formatting\n\n💡 **Explanation ({expl_lang}):** " + 
+                            ("Adjusted initial capitalization and added proper sentence punctuation." if expl_lang == "English" else "First letter capital panni, proper ending punctuation add pannirukken."))
 
             else:
                 if not GROQ_AVAILABLE:
@@ -108,13 +122,21 @@ if st.button("Check Grammar & Explain", type="primary"):
                     try:
                         client = Groq(api_key=groq_api_key)
                         
+                        # Dynamic Language Prompt Instruction
+                        if expl_lang == "Thanglish (Tamil-English)":
+                            lang_instruction = "Provide the EXPLANATION in simple, friendly Thanglish (Tamil words written using English alphabet letters, like how friends talk, explaining clearly why the mistake happened)."
+                        else:
+                            lang_instruction = "Provide the EXPLANATION in clear, simple English."
+
                         prompt = f"""Task: Correct the grammar of the following sentence. You must thoroughly fix all grammatical, spelling, and tense errors. Do not return the sentence unchanged unless it is already 100% grammatically perfect.
+
+{lang_instruction}
 
 Return your response EXACTLY in this format with these section markers:
 SCORE: <integer from 0 to 100 indicating grammatical accuracy>
 CORRECTED: <fully corrected and grammatically accurate version of the sentence>
 ERROR_TYPE: <type of grammar error, e.g. Tense Error, Subject-Verb Agreement, Spelling, Contraction Error, etc.>
-EXPLANATION: <a clear 1-2 line explanation detailing why it was wrong and how to fix it>
+EXPLANATION: <1-2 line explanation detailing why it was wrong and how to fix it>
 
 Input Sentence: "{user_input}"
 """
@@ -153,7 +175,7 @@ Input Sentence: "{user_input}"
 
                         st.success(f"### Corrected Sentence:\n**{corrected_text}**")
                         st.warning(f"📌 **Error Type:** {error_type}")
-                        st.info(f"💡 **Explanation:** {explanation}")
+                        st.info(f"💡 **Explanation ({expl_lang}):** {explanation}")
                         
                     except Exception as e:
-                        st.error(f"API Execution Error: {e}")
+                        st.error(f5"API Execution Error: {e}")
