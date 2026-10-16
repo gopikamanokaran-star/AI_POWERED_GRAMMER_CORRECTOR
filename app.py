@@ -122,9 +122,9 @@ if st.button("Check Grammar & Explain", type="primary"):
                     try:
                         client = Groq(api_key=groq_api_key)
                         
-                        # Dynamic Language Prompt Instruction
+                        # Dynamic Language Prompt Instruction with Strict Requirement
                         if expl_lang == "Thanglish (Tamil-English)":
-                            lang_instruction = "Provide the EXPLANATION in simple, friendly Thanglish (Tamil words written using English alphabet letters, like how friends talk, explaining clearly why the mistake happened)."
+                            lang_instruction = "CRITICAL REQUIREMENT: Provide the EXPLANATION strictly and entirely in conversational Thanglish (Tamil words written using English letters, e.g., 'Indha sentence-la spelling thappu irukku, atha correct pannirukkom'). Do NOT write standard English in the EXPLANATION field."
                         else:
                             lang_instruction = "Provide the EXPLANATION in clear, simple English."
 
