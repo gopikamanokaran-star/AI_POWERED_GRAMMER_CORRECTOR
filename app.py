@@ -37,16 +37,23 @@ if correction_mode == "Real AI Mode (Groq)":
         try:
             client = Groq(api_key=groq_api_key)
             models_data = client.models.list()
-            # Smart Filtering: Exclude audio, guard, and regional models to avoid 400/404 errors
+            # Exclude guard, whisper, canopylabs, qwen, and allam to prevent rate-limit (429) & permission (400) errors
             available_models = [
                 m.id for m in models_data.data 
                 if "guard" not in m.id.lower() 
                 and "whisper" not in m.id.lower() 
                 and "canopylabs" not in m.id.lower()
+                and "qwen" not in m.id.lower()
+                and "allam" not in m.id.lower()
                 and ("llama" in m.id.lower() or "mixtral" in m.id.lower() or "gemma" in m.id.lower())
             ]
             if not available_models:
-                available_models = [m.id for m in models_data.data if "guard" not in m.id.lower() and "whisper" not in m.id.lower()]
+                available_models = [
+                    m.id for m in models_data.data 
+                    if "guard" not in m.id.lower() 
+                    and "whisper" not in m.id.lower() 
+                    and "qwen" not in m.id.lower()
+                ]
 
             if available_models:
                 selected_model = st.sidebar.selectbox("Select Active Groq Model", available_models)
@@ -122,28 +129,29 @@ if st.button("Check Grammar & Explain", type="primary"):
                     try:
                         client = Groq(api_key=groq_api_key)
                         
-                        # Dynamic Language Prompt Instruction with Strict Requirement
+                        # Strict Language Prompt
                         if expl_lang == "Thanglish (Tamil-English)":
-                            lang_instruction = "CRITICAL REQUIREMENT: Provide the EXPLANATION strictly and entirely in conversational Thanglish (Tamil words written using English letters, e.g., 'Indha sentence-la spelling thappu irukku, atha correct pannirukkom'). Do NOT write standard English in the EXPLANATION field."
+                            lang_instruction = "CRITICAL: Write EXPLANATION ONLY in conversational Thanglish (Tamil words written using English alphabets, e.g., 'Indha sentence-la spelling thappu irukku, atha correct pannirukkom'). DO NOT use pure English."
                         else:
-                            lang_instruction = "Provide the EXPLANATION in clear, simple English."
+                            lang_instruction = "Write EXPLANATION in clear, simple English."
 
-                        prompt = f"""Task: Correct the grammar of the following sentence. You must thoroughly fix all grammatical, spelling, and tense errors. Do not return the sentence unchanged unless it is already 100% grammatically perfect.
+                        prompt = f"""Task: Correct the grammar of the input sentence.
 
 {lang_instruction}
 
-Return your response EXACTLY in this format with these section markers:
-SCORE: <integer from 0 to 100 indicating grammatical accuracy>
-CORRECTED: <fully corrected and grammatically accurate version of the sentence>
-ERROR_TYPE: <type of grammar error, e.g. Tense Error, Subject-Verb Agreement, Spelling, Contraction Error, etc.>
-EXPLANATION: <1-2 line explanation detailing why it was wrong and how to fix it>
+Return response EXACTLY in this format:
+SCORE: <integer 0-100>
+CORRECTED: <corrected sentence>
+ERROR_TYPE: <error type>
+EXPLANATION: <1 line explanation>
 
 Input Sentence: "{user_input}"
 """
                         response = client.chat.completions.create(
                             messages=[{"role": "user", "content": prompt}],
                             model=selected_model,
-                            temperature=0.1
+                            temperature=0.1,
+                            max_tokens=250
                         )
                         raw_output = response.choices[0].message.content.strip()
                         
