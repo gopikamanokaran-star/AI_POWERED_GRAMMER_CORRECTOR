@@ -1,4 +1,5 @@
 import streamlit as st
+import re
 
 # Page Configuration
 st.set_page_config(page_title="AI Grammar Corrector & Explainer", page_icon="✍️", layout="wide")
@@ -37,28 +38,24 @@ if correction_mode == "Real AI Mode (Groq)":
         try:
             client = Groq(api_key=groq_api_key)
             models_data = client.models.list()
-            # Exclude guard, whisper, canopylabs, qwen, and allam to prevent rate-limit (429) & permission (400) errors
+            # Strict Filtering: Prefer high-performance Llama models to avoid parsing & rate limit issues
             available_models = [
                 m.id for m in models_data.data 
-                if "guard" not in m.id.lower() 
-                and "whisper" not in m.id.lower() 
-                and "canopylabs" not in m.id.lower()
-                and "qwen" not in m.id.lower()
-                and "allam" not in m.id.lower()
-                and ("llama" in m.id.lower() or "mixtral" in m.id.lower() or "gemma" in m.id.lower())
+                if "llama" in m.id.lower() 
+                and "guard" not in m.id.lower() 
+                and "vision" not in m.id.lower()
             ]
             if not available_models:
                 available_models = [
                     m.id for m in models_data.data 
-                    if "guard" not in m.id.lower() 
-                    and "whisper" not in m.id.lower() 
-                    and "qwen" not in m.id.lower()
+                    if ("mixtral" in m.id.lower() or "gemma" in m.id.lower())
+                    and "guard" not in m.id.lower()
                 ]
 
             if available_models:
                 selected_model = st.sidebar.selectbox("Select Active Groq Model", available_models)
             else:
-                st.sidebar.error("No active text models found in your Groq account.")
+                st.sidebar.error("No valid Llama/Gemma models found in your Groq account.")
         except Exception as e:
             st.sidebar.error(f"API Key Error: {e}")
 
@@ -129,51 +126,60 @@ if st.button("Check Grammar & Explain", type="primary"):
                     try:
                         client = Groq(api_key=groq_api_key)
                         
-                        # Strict Language Prompt
+                        # Strict Language Instruction
                         if expl_lang == "Thanglish (Tamil-English)":
-                            lang_instruction = "CRITICAL: Write EXPLANATION ONLY in conversational Thanglish (Tamil words written using English alphabets, e.g., 'Indha sentence-la spelling thappu irukku, atha correct pannirukkom'). DO NOT use pure English."
+                            lang_inst = "Write the EXPLANATION strictly in friendly Thanglish (Tamil words typed in English, e.g., 'Indha sentence-la verb tense thappu irukku, adhanaala change pannirukkom'). Do NOT use standard English for explanation."
                         else:
-                            lang_instruction = "Write EXPLANATION in clear, simple English."
+                            lang_inst = "Write the EXPLANATION in clear, professional English."
 
-                        prompt = f"""Task: Correct the grammar of the input sentence.
+                        system_message = f"""You are an expert AI English Grammar Corrector and Language Tutor. 
+Your primary job is to thoroughly fix ALL grammar, tense, spelling, capitalization, and punctuation errors. 
 
-{lang_instruction}
+Rules:
+1. Always fix the sentence properly.
+2. {lang_inst}
+3. Output format must be strictly plain text following these line keys:
 
-Return response EXACTLY in this format:
-SCORE: <integer 0-100>
-CORRECTED: <corrected sentence>
-ERROR_TYPE: <error type>
-EXPLANATION: <1 line explanation>
+SCORE: <0 to 100 integer>
+CORRECTED: <fully grammatically corrected sentence>
+ERROR_TYPE: <category of error>
+EXPLANATION: <detailed 1-2 line explanation>"""
 
-Input Sentence: "{user_input}"
-"""
+                        prompt = f'Analyze and correct this sentence: "{user_input}"'
+
                         response = client.chat.completions.create(
-                            messages=[{"role": "user", "content": prompt}],
+                            messages=[
+                                {"role": "system", "content": system_message},
+                                {"role": "user", "content": prompt}
+                            ],
                             model=selected_model,
-                            temperature=0.1,
-                            max_tokens=250
+                            temperature=0.2,
+                            max_tokens=350
                         )
                         raw_output = response.choices[0].message.content.strip()
                         
-                        # Parsing logic
-                        score_val = 80
+                        # Fallback parsing regex
+                        score_val = 70
                         corrected_text = user_input
                         error_type = "Grammar Error"
-                        explanation = raw_output
+                        explanation = "Grammar corrections were made to improve sentence structure and clarity."
 
                         for line in raw_output.split("\n"):
-                            if line.startswith("SCORE:"):
-                                try:
-                                    score_val = int(''.join(filter(str.isdigit, line.replace("SCORE:", ""))))
-                                    score_val = min(max(score_val, 0), 100)
-                                except:
-                                    pass
-                            elif line.startswith("CORRECTED:"):
-                                corrected_text = line.replace("CORRECTED:", "").strip()
-                            elif line.startswith("ERROR_TYPE:"):
-                                error_type = line.replace("ERROR_TYPE:", "").strip()
-                            elif line.startswith("EXPLANATION:"):
-                                explanation = line.replace("EXPLANATION:", "").strip()
+                            line_clean = line.strip()
+                            if line_clean.upper().startswith("SCORE:"):
+                                num = re.findall(r'\d+', line_clean)
+                                if num:
+                                    score_val = min(max(int(num[0]), 0), 100)
+                            elif line_clean.upper().startswith("CORRECTED:"):
+                                corrected_text = re.sub(r'^CORRECTED:\s*', '', line_clean, flags=re.I)
+                            elif line_clean.upper().startswith("ERROR_TYPE:"):
+                                error_type = re.sub(r'^ERROR_TYPE:\s*', '', line_clean, flags=re.I)
+                            elif line_clean.upper().startswith("EXPLANATION:"):
+                                explanation = re.sub(r'^EXPLANATION:\s*', '', line_clean, flags=re.I)
+
+                        # If explanation was still empty, use raw output fallback
+                        if not explanation or explanation == raw_output:
+                            explanation = raw_output
 
                         # Rendering Results
                         st.subheader("📊 Accuracy Analysis")
